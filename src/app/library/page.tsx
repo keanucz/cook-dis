@@ -182,7 +182,7 @@ function FilterTab({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
         active
           ? 'bg-orange-100 text-orange-700'
           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

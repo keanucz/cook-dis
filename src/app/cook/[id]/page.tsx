@@ -54,6 +54,8 @@ export default function CookingPage({ params }: CookingPageProps) {
   const [isRetrying, setIsRetrying] = useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [preloadedAudio, setPreloadedAudio] = useState<Map<string, string>>(new Map());
+  const [isPreloadingAudio, setIsPreloadingAudio] = useState(false);
 
   // Calculate image generation progress
   const getImageProgress = useCallback(() => {
@@ -87,17 +89,81 @@ export default function CookingPage({ params }: CookingPageProps) {
     fetchData();
   }, [fetchData]);
 
-  // Poll for image generation updates (faster polling - every 2 seconds)
+  // Preload TTS audio for all steps once images are done
+  const preloadAllAudio = useCallback(async () => {
+    if (!data || isPreloadingAudio || preloadedAudio.size > 0) return;
+    
+    setIsPreloadingAudio(true);
+    console.log('[COOK] Starting TTS audio preload for all steps...');
+    
+    const newPreloadedAudio = new Map<string, string>();
+    
+    for (const step of data.steps) {
+      try {
+        console.log(`[COOK] Preloading audio for step ${step.stepIndex + 1}...`);
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: step.instruction }),
+        });
+        
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const url = URL.createObjectURL(audioBlob);
+          newPreloadedAudio.set(step.id, url);
+          console.log(`[COOK] ✅ Audio preloaded for step ${step.stepIndex + 1}`);
+        }
+      } catch (error) {
+        console.error(`[COOK] Failed to preload audio for step ${step.stepIndex + 1}:`, error);
+      }
+    }
+    
+    setPreloadedAudio(newPreloadedAudio);
+    setIsPreloadingAudio(false);
+    console.log(`[COOK] Audio preload complete: ${newPreloadedAudio.size}/${data.steps.length} steps`);
+  }, [data, isPreloadingAudio, preloadedAudio.size]);
+
+  // Poll for image generation updates
+  // Reduced frequency to avoid rate limits - poll every 5 seconds, trigger worker every 10 seconds
   useEffect(() => {
     if (!data) return;
 
-    const { allDone } = getImageProgress();
+    const { allDone, completed, total } = getImageProgress();
+    console.log(`[COOK] Image progress: ${completed}/${total}, allDone: ${allDone}`);
     
     if (!allDone) {
-      const interval = setInterval(fetchData, 2000); // Poll every 2 seconds for images
+      let pollCount = 0;
+      
+      // Trigger the worker once on mount
+      const triggerWorker = async () => {
+        try {
+          console.log('[COOK] Triggering worker...');
+          await fetch('/api/jobs/trigger', { method: 'POST' });
+        } catch (err) {
+          console.log('Worker trigger failed (this is ok):', err);
+        }
+      };
+      triggerWorker();
+      
+      // Poll for data updates every 5 seconds
+      // Only trigger worker every 3rd poll (15 seconds) to reduce overhead
+      const interval = setInterval(() => {
+        pollCount++;
+        console.log(`[COOK] Polling for updates (poll #${pollCount})...`);
+        fetchData();
+        
+        // Trigger worker less frequently to avoid hammering the server
+        if (pollCount % 3 === 0) {
+          triggerWorker();
+        }
+      }, 5000); // Poll every 5 seconds
+      
       return () => clearInterval(interval);
+    } else {
+      // All images done - start preloading audio in background
+      preloadAllAudio();
     }
-  }, [data, fetchData, getImageProgress]);
+  }, [data, fetchData, getImageProgress, preloadAllAudio]);
 
   // Update progress when step changes
   useEffect(() => {
@@ -113,9 +179,26 @@ export default function CookingPage({ params }: CookingPageProps) {
   }, [currentStep, data, id]);
 
   // Generate TTS audio on-demand when step changes or play is requested
-  const generateAndPlayAudio = useCallback(async (text: string) => {
+  // Uses preloaded audio if available, otherwise generates on-demand
+  const generateAndPlayAudio = useCallback(async (stepId: string, text: string) => {
     if (isMuted || !text) return;
     
+    // Check if audio is already preloaded
+    const preloadedUrl = preloadedAudio.get(stepId);
+    if (preloadedUrl) {
+      console.log('[COOK] Using preloaded audio');
+      if (audioUrl && audioUrl !== preloadedUrl) {
+        // Don't revoke preloaded URLs
+        if (!Array.from(preloadedAudio.values()).includes(audioUrl)) {
+          URL.revokeObjectURL(audioUrl);
+        }
+      }
+      setAudioUrl(preloadedUrl);
+      setIsPlaying(true);
+      return;
+    }
+    
+    // Generate on-demand if not preloaded
     setIsGeneratingAudio(true);
     try {
       const response = await fetch('/api/tts', {
@@ -131,8 +214,8 @@ export default function CookingPage({ params }: CookingPageProps) {
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
       
-      // Clean up previous audio URL
-      if (audioUrl) {
+      // Clean up previous audio URL (only if not preloaded)
+      if (audioUrl && !Array.from(preloadedAudio.values()).includes(audioUrl)) {
         URL.revokeObjectURL(audioUrl);
       }
       
@@ -144,7 +227,7 @@ export default function CookingPage({ params }: CookingPageProps) {
     } finally {
       setIsGeneratingAudio(false);
     }
-  }, [isMuted, audioUrl]);
+  }, [isMuted, audioUrl, preloadedAudio]);
 
   // Handle audio playback
   useEffect(() => {
@@ -157,14 +240,19 @@ export default function CookingPage({ params }: CookingPageProps) {
     }
   }, [isPlaying, isMuted, audioUrl]);
 
-  // Cleanup audio URL on unmount
+  // Cleanup audio URLs on unmount
   useEffect(() => {
     return () => {
-      if (audioUrl) {
+      // Clean up current audio URL if not from preloaded cache
+      if (audioUrl && !Array.from(preloadedAudio.values()).includes(audioUrl)) {
         URL.revokeObjectURL(audioUrl);
       }
+      // Clean up all preloaded audio URLs
+      preloadedAudio.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
     };
-  }, [audioUrl]);
+  }, [audioUrl, preloadedAudio]);
 
   const currentStepData = data?.steps[currentStep];
   const currentMedia = data?.stepMedia.find(
@@ -183,7 +271,7 @@ export default function CookingPage({ params }: CookingPageProps) {
     if (isPlaying) {
       setIsPlaying(false);
     } else if (currentStepData) {
-      generateAndPlayAudio(currentStepData.instruction);
+      generateAndPlayAudio(currentStepData.id, currentStepData.instruction);
     }
   };
 
@@ -433,55 +521,70 @@ export default function CookingPage({ params }: CookingPageProps) {
         />
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Image Section */}
-        <div className="lg:w-1/2 relative bg-gray-800 flex items-center justify-center min-h-[300px] lg:min-h-0">
+      {/* Main Content - Full bleed image with overlaid text */}
+      <main className="flex-1 relative overflow-hidden">
+        {/* Full-bleed Image Background */}
+        <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
           {currentMedia?.imageStatus === 'completed' && currentMedia.imageUrl ? (
             <img
               src={currentMedia.imageUrl}
               alt={`Step ${currentStep + 1}`}
-              className="w-full h-full object-cover"
+              className="max-w-full max-h-full object-contain"
             />
           ) : currentMedia?.imageStatus === 'failed' ? (
-            <div className="text-center p-8">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <p className="text-gray-400 mb-4">Image generation failed</p>
-              <Button
-                onClick={() => handleRetryMedia(currentStepData!.id, 'image')}
-                variant="secondary"
-                size="sm"
-                isLoading={isRetrying === currentStepData?.id}
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center p-8">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">Image generation failed</p>
+                <Button
+                  onClick={() => handleRetryMedia(currentStepData!.id)}
+                  variant="secondary"
+                  size="sm"
+                  isLoading={isRetrying === currentStepData?.id}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="text-center p-8">
-              <div className="relative">
-                <ChefHat className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                <Loader2 className="h-6 w-6 text-orange-500 animate-spin absolute bottom-3 right-1/2 translate-x-6" />
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center p-8">
+                <div className="relative">
+                  <ChefHat className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+                  <Loader2 className="h-6 w-6 text-orange-500 animate-spin absolute bottom-3 right-1/2 translate-x-6" />
+                </div>
+                <p className="text-gray-400">Generating image...</p>
               </div>
-              <p className="text-gray-400">Generating image...</p>
             </div>
           )}
-
-          {/* Step indicator overlay */}
-          <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-black/50 text-sm font-medium">
-            Step {currentStep + 1} of {data.steps.length}
-          </div>
+          
+          {/* Gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         </div>
 
-        {/* Instructions Section */}
-        <div className="lg:w-1/2 flex flex-col p-6 lg:p-8 overflow-y-auto">
-          <div className="flex-1">
-            <p className="text-2xl lg:text-3xl leading-relaxed mb-6">
+        {/* Step indicator - top left */}
+        <div className="absolute top-4 left-4 px-3 py-1.5 rounded-2xl bg-black/60 backdrop-blur-sm text-sm font-medium z-10">
+          Step {currentStep + 1} of {data.steps.length}
+        </div>
+
+        {/* Audio preload status indicator - top right */}
+        {isPreloadingAudio && (
+          <div className="absolute top-4 right-4 px-3 py-1.5 rounded-2xl bg-black/60 backdrop-blur-sm text-sm font-medium z-10 flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin text-orange-400" />
+            <span className="text-gray-300">Preloading audio...</span>
+          </div>
+        )}
+
+        {/* Instructions overlay - bottom squircle */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+          <div className="bg-gray-900/90 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-white/10 max-h-[40vh] overflow-y-auto">
+            <p className="text-lg sm:text-xl lg:text-2xl leading-relaxed text-white mb-3">
               {currentStepData?.instruction}
             </p>
 
             {currentStepData?.tips && (
-              <div className="p-4 rounded-lg bg-amber-900/30 border border-amber-700/50">
+              <div className="p-3 rounded-xl bg-amber-900/40 border border-amber-700/50 mb-3">
                 <p className="text-amber-200 text-sm">
                   💡 <strong>Tip:</strong> {currentStepData.tips}
                 </p>
@@ -489,33 +592,38 @@ export default function CookingPage({ params }: CookingPageProps) {
             )}
 
             {currentStepData?.timerMinutes && (
-              <div className="mt-4 p-4 rounded-lg bg-gray-800">
-                <p className="text-gray-300 flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-orange-500" />
+              <div className="p-3 rounded-xl bg-gray-800/80">
+                <p className="text-gray-300 flex items-center gap-2 text-sm">
+                  <Clock className="h-4 w-4 text-orange-500" />
                   Timer: {currentStepData.timerMinutes} minutes
                 </p>
               </div>
             )}
-          </div>
 
-          {/* Audio Status - On-demand TTS */}
-          <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
-            {isGeneratingAudio ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating audio...
-              </>
-            ) : isPlaying ? (
-              <>
-                <Volume2 className="h-4 w-4 text-orange-500" />
-                Playing narration...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" />
-                Tap play to hear narration
-              </>
-            )}
+            {/* Audio Status - On-demand TTS */}
+            <div className="mt-3 flex items-center gap-2 text-sm text-gray-400">
+              {isGeneratingAudio ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating audio...
+                </>
+              ) : isPlaying ? (
+                <>
+                  <Volume2 className="h-4 w-4 text-orange-500" />
+                  Playing narration...
+                </>
+              ) : preloadedAudio.has(currentStepData?.id || '') ? (
+                <>
+                  <Check className="h-4 w-4 text-green-500" />
+                  Audio ready - tap play
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Tap play to hear narration
+                </>
+              )}
+            </div>
           </div>
         </div>
       </main>

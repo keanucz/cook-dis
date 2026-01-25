@@ -166,7 +166,7 @@ function ImportPageContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setSearchProvider('themealdb')}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       searchProvider === 'themealdb'
                         ? 'bg-orange-100 text-orange-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -176,7 +176,7 @@ function ImportPageContent() {
                   </button>
                   <button
                     onClick={() => setSearchProvider('spoonacular')}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       searchProvider === 'spoonacular'
                         ? 'bg-orange-100 text-orange-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -206,7 +206,7 @@ function ImportPageContent() {
                       <button
                         key={result.id}
                         onClick={() => setSelectedResult(result)}
-                        className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                        className={`relative rounded-md overflow-hidden border-2 transition-all ${
                           selectedResult?.id === result.id
                             ? 'border-orange-500 ring-2 ring-orange-200'
                             : 'border-gray-200 hover:border-gray-300'
@@ -277,7 +277,7 @@ function ImportPageContent() {
                 <button
                   key={key}
                   onClick={() => setSelectedModel(key as RunwareModelArchitecture)}
-                  className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                  className={`w-full p-3 rounded-md border-2 text-left transition-all ${
                     selectedModel === key
                       ? 'border-orange-500 bg-orange-50'
                       : 'border-gray-200 hover:border-gray-300'

@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.975.0",
     "@aws-sdk/s3-request-presigner": "^3.975.0",
     "@mendable/firecrawl-js": "^4.11.4",
+    "@runware/sdk-js": "^1.2.3",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.91.1",
     "canvas-confetti": "^1.9.4",

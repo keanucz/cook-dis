@@ -79,7 +79,7 @@ export class RecipeUrlParser {
     }
 
     const html = await response.text();
-    return this.parseHtml(html, url);
+    return await this.parseHtml(html, url);
   }
 
   // Firecrawl - handles Cloudflare and JS rendering
@@ -88,18 +88,16 @@ export class RecipeUrlParser {
       throw new Error('Firecrawl API key not configured');
     }
 
-    const result = await this.firecrawl.scrapeUrl(url, {
+    const result = await this.firecrawl.scrape(url, {
       formats: ['html', 'markdown'],
     });
 
-    if (!result.success) {
-      throw new Error(`Firecrawl failed: ${result.error || 'Unknown error'}`);
-    }
+    // The SDK returns the document directly, throws on error
 
     // Try to parse HTML first for structured data
     if (result.html) {
       try {
-        return this.parseHtml(result.html, url);
+        return await this.parseHtml(result.html, url);
       } catch {
         // Fall through to markdown parsing
       }
@@ -195,7 +193,7 @@ Return ONLY the JSON, no other text.`,
   }
 
   // Parse HTML content
-  private parseHtml(html: string, url: string): ParsedRecipe {
+  private async parseHtml(html: string, url: string): Promise<ParsedRecipe> {
     const $ = cheerio.load(html);
 
     // Try to find JSON-LD schema.org Recipe data first
@@ -213,7 +211,7 @@ Return ONLY the JSON, no other text.`,
     // Fallback: Use LLM to parse the raw content
     const rawContent = this.extractRawContent($, url);
     const openai = getOpenAIService();
-    return openai.normalizeRecipe(rawContent, url);
+    return await openai.normalizeRecipe(rawContent, url);
   }
 
   private extractJsonLd($: cheerio.CheerioAPI): JsonLdRecipe | null {
@@ -296,7 +294,9 @@ Return ONLY the JSON, no other text.`,
     if (typeof data.image === 'string') {
       thumbnailUrl = data.image;
     } else if (Array.isArray(data.image)) {
-      thumbnailUrl = typeof data.image[0] === 'string' ? data.image[0] : data.image[0]?.url;
+      // Array can contain strings or objects with url
+      const firstImage = data.image[0];
+      thumbnailUrl = typeof firstImage === 'string' ? firstImage : undefined;
     } else if (data.image?.url) {
       thumbnailUrl = data.image.url;
     }

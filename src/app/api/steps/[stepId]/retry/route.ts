@@ -75,7 +75,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, jobsCreated: jobs.length });
+    return NextResponse.json({ success: true, jobsCreated: 1 });
   } catch (error) {
     console.error('Retry generation error:', error);
     return NextResponse.json(

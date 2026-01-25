@@ -1,5 +1,6 @@
 // ===========================================
 // S3-Compatible Storage Backend (AWS S3, Cloudflare R2, MinIO)
+// Requires: @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner
 // ===========================================
 
 import {

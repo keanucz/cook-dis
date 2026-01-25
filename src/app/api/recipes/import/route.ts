@@ -160,6 +160,25 @@ export async function POST(request: NextRequest) {
 
     await adminClient.from('jobs').insert(jobs);
 
+    // Trigger the worker to start processing jobs immediately
+    // Fire and forget - don't wait for it to complete
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      fetch(`${baseUrl}/api/jobs/worker`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cronSecret}`,
+          'Content-Type': 'application/json',
+        },
+      }).catch((err) => {
+        console.error('Failed to trigger worker:', err);
+      });
+      console.log('[IMPORT] Triggered worker to process jobs');
+    } else {
+      console.warn('[IMPORT] CRON_SECRET not set, worker not triggered automatically');
+    }
+
     return NextResponse.json({
       success: true,
       recipeId,

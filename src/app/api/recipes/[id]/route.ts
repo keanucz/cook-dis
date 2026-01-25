@@ -71,8 +71,22 @@ export async function GET(
           }
         }
 
+        // Transform snake_case to camelCase for frontend
         return {
-          ...media,
+          id: media.id,
+          stepId: media.step_id,
+          recipeId: media.recipe_id,
+          imagePath: media.image_path,
+          audioPath: media.audio_path,
+          imageStatus: media.image_status,
+          audioStatus: media.audio_status,
+          imageError: media.image_error,
+          audioError: media.audio_error,
+          modelArchitecture: media.model_architecture,
+          modelAir: media.model_air,
+          generationPrompt: media.generation_prompt,
+          createdAt: media.created_at,
+          updatedAt: media.updated_at,
           imageUrl,
           audioUrl,
         };

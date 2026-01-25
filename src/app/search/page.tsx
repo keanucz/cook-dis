@@ -29,6 +29,7 @@ function SearchContent() {
     if (initialQuery) {
       handleSearch();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
@@ -82,7 +83,7 @@ function SearchContent() {
           <button
             type="button"
             onClick={() => setProvider('themealdb')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               provider === 'themealdb'
                 ? 'bg-orange-100 text-orange-700'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -93,7 +94,7 @@ function SearchContent() {
           <button
             type="button"
             onClick={() => setProvider('spoonacular')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               provider === 'spoonacular'
                 ? 'bg-orange-100 text-orange-700'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -160,7 +161,7 @@ function SearchContent() {
             Discover new recipes
           </h2>
           <p className="text-gray-600 max-w-md mx-auto">
-            Search for any dish, ingredient, or cuisine. We'll help you cook it with 
+            Search for any dish, ingredient, or cuisine. We&apos;ll help you cook it with 
             step-by-step AI guidance.
           </p>
         </div>

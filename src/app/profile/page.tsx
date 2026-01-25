@@ -181,7 +181,7 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-md bg-orange-100 flex items-center justify-center">
             <User className="h-8 w-8 text-orange-600" />
           </div>
           <div>
@@ -231,7 +231,7 @@ export default function ProfilePage() {
                   {Object.entries(RUNWARE_MODELS).map(([key, model]) => (
                     <label
                       key={key}
-                      className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      className={`flex items-center p-3 rounded-md border-2 cursor-pointer transition-all ${
                         settings?.defaultModelArchitecture === key
                           ? 'border-orange-500 bg-orange-50'
                           : 'border-gray-200 hover:border-gray-300'
@@ -332,9 +332,9 @@ export default function ProfilePage() {
                   {completedRecipes.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
+                      className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-50"
                     >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                      <div className="w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
                         {item.recipe.thumbnail_url ? (
                           <img
                             src={item.recipe.thumbnail_url}
@@ -380,7 +380,7 @@ function StatCard({
   return (
     <Card>
       <CardContent className="py-4 text-center">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 text-orange-600 mb-2">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-md bg-orange-100 text-orange-600 mb-2">
           {icon}
         </div>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
